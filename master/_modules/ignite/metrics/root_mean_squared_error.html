@@ -14,6 +14,8 @@
 
   
   
+    <link rel="shortcut icon" href="../../../_static/ignite_logomark.svg"/>
+  
   
   
     <link rel="canonical" href="https://pytorch.org/ignite/index.html_modules/ignite/metrics/root_mean_squared_error.html"/>
@@ -60,17 +62,19 @@
 
 <div class="container-fluid header-holder tutorials-header" id="header-holder">
   <div class="container">
+
+    <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
+
     <div class="header-container">
-      <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
 
       <div class="main-menu">
         <ul>
           <li>
-            <a href="../../../concepts.html">Concepts</a>
+            <a href="../../../quickstart.html">Quickstart</a>
           </li>
 
           <li>
-            <a href="../../../quickstart.html">Quickstart</a>
+            <a href="../../../concepts.html">Concepts</a>
           </li>
 
           <li>
@@ -120,7 +124,7 @@
               
               
                 <div class="version">
-                  master (0.4.0)
+                  master (0.5.0)
                 </div>
               
             
@@ -150,8 +154,8 @@
             
               <p class="caption"><span class="caption-text">Notes</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../concepts.html">Concepts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../faq.html">FAQ</a></li>
 </ul>
@@ -283,7 +287,7 @@
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Calculates the root mean squared error.</span>
 
-<span class="sd">    - `update` must receive output of the form (y_pred, y) or `{&#39;y_pred&#39;: y_pred, &#39;y&#39;: y}`.</span>
+<span class="sd">    - ``update`` must receive output of the form (y_pred, y) or `{&#39;y_pred&#39;: y_pred, &#39;y&#39;: y}`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span> <span class="nf">compute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
@@ -334,11 +338,11 @@
 
      
        <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
-         <script type="text/javascript" src="../../../_static/jquery.js"></script>
-         <script type="text/javascript" src="../../../_static/underscore.js"></script>
-         <script type="text/javascript" src="../../../_static/doctools.js"></script>
-         <script type="text/javascript" src="../../../_static/language_data.js"></script>
-         <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+         <script src="../../../_static/jquery.js"></script>
+         <script src="../../../_static/underscore.js"></script>
+         <script src="../../../_static/doctools.js"></script>
+         <script src="../../../_static/language_data.js"></script>
+         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
      
 
   

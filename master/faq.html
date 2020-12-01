@@ -14,6 +14,8 @@
 
   
   
+    <link rel="shortcut icon" href="_static/ignite_logomark.svg"/>
+  
   
   
     <link rel="canonical" href="https://pytorch.org/ignite/index.htmlfaq.html"/>
@@ -62,17 +64,19 @@
 
 <div class="container-fluid header-holder tutorials-header" id="header-holder">
   <div class="container">
+
+    <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
+
     <div class="header-container">
-      <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
 
       <div class="main-menu">
         <ul>
           <li>
-            <a href="concepts.html">Concepts</a>
+            <a href="quickstart.html">Quickstart</a>
           </li>
 
           <li>
-            <a href="quickstart.html">Quickstart</a>
+            <a href="concepts.html">Concepts</a>
           </li>
 
           <li>
@@ -122,7 +126,7 @@
               
               
                 <div class="version">
-                  master (0.4.0)
+                  master (0.5.0)
                 </div>
               
             
@@ -152,8 +156,8 @@
             
               <p class="caption"><span class="caption-text">Notes</span></p>
 <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">FAQ</a></li>
 </ul>
@@ -300,13 +304,15 @@ As a consequence, the following code is correct too:</p>
 <span class="n">evaluator</span><span class="o">.</span><span class="n">add_event_handler</span><span class="p">(</span><span class="n">Events</span><span class="o">.</span><span class="n">COMPLETED</span><span class="p">,</span> <span class="n">best_model_saver</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;mymodel&#39;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
 </pre></div>
 </div>
-<p>More details <a class="reference external" href="concepts.html#events-and-handlers">Events and Handlers</a>.</p>
+<p>More details <a class="reference internal" href="concepts.html#events-and-handlers"><span class="std std-ref">Events and Handlers</span></a>.</p>
 </div>
 <div class="section" id="creating-custom-events-based-on-forward-backward-pass">
 <h2>Creating Custom Events based on Forward/Backward Pass<a class="headerlink" href="#creating-custom-events-based-on-forward-backward-pass" title="Permalink to this headline">¶</a></h2>
 <p>There are cases where the user might want to add events based on the loss calculation and backward pass. Ignite provides
 flexibility to the user to allow for this:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">BackpropEvents</span><span class="p">(</span><span class="n">EventEnum</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ignite.engine</span> <span class="kn">import</span> <span class="n">EventEnum</span>
+
+<span class="k">class</span> <span class="nc">BackpropEvents</span><span class="p">(</span><span class="n">EventEnum</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Events based on back propagation</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -335,6 +341,10 @@ flexibility to the user to allow for this:</p>
 <span class="k">def</span> <span class="nf">function_before_backprop</span><span class="p">(</span><span class="n">engine</span><span class="p">):</span>
     <span class="c1"># insert custom function here</span>
 </pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Events defined by user should inherit from <a class="reference internal" href="engine.html#ignite.engine.events.EventEnum" title="ignite.engine.events.EventEnum"><code class="xref py py-class docutils literal notranslate"><span class="pre">EventEnum</span></code></a></p>
 </div>
 <p>More detailed implementation can be found in <a class="reference external" href="_modules/ignite/contrib/engines/tbptt.html#create_supervised_tbptt_trainer">TBPTT Trainer</a>.</p>
 </div>
@@ -600,8 +610,8 @@ See an example in the documentation of the method.</p>
 </div>
 <p>For details, see <a class="reference internal" href="engine.html#ignite.engine.events.State" title="ignite.engine.events.State"><code class="xref py py-class docutils literal notranslate"><span class="pre">State</span></code></a>.</p>
 </div>
-<div class="section" id="detailed-profiling">
-<h3>Detailed profiling<a class="headerlink" href="#detailed-profiling" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="basic-time-profiling">
+<h3>Basic time profiling<a class="headerlink" href="#basic-time-profiling" title="Permalink to this headline">¶</a></h3>
 <p>User can setup <a class="reference internal" href="contrib/handlers.html#ignite.contrib.handlers.time_profilers.BasicTimeProfiler" title="ignite.contrib.handlers.time_profilers.BasicTimeProfiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">BasicTimeProfiler</span></code></a> to fetch times spent in data
 processing, training step, event handlers:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ignite.contrib.handlers</span> <span class="kn">import</span> <span class="n">BasicTimeProfiler</span>
@@ -655,6 +665,46 @@ not yet triggered
 </div>
 <p>For details, see <a class="reference internal" href="contrib/handlers.html#ignite.contrib.handlers.time_profilers.BasicTimeProfiler" title="ignite.contrib.handlers.time_profilers.BasicTimeProfiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">BasicTimeProfiler</span></code></a>.</p>
 </div>
+<div class="section" id="event-handlers-time-profiling">
+<h3>Event handlers time profiling<a class="headerlink" href="#event-handlers-time-profiling" title="Permalink to this headline">¶</a></h3>
+<p>If you want to get time breakdown per handler basis then you can setup
+<a class="reference internal" href="contrib/handlers.html#ignite.contrib.handlers.time_profilers.HandlersTimeProfiler" title="ignite.contrib.handlers.time_profilers.HandlersTimeProfiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">HandlersTimeProfiler</span></code></a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ignite.contrib.handlers</span> <span class="kn">import</span> <span class="n">HandlersTimeProfiler</span>
+
+<span class="n">trainer</span> <span class="o">=</span> <span class="o">...</span>
+
+<span class="c1"># Create an object of the profiler and attach an engine to it</span>
+<span class="n">profiler</span> <span class="o">=</span> <span class="n">HandlersTimeProfiler</span><span class="p">()</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">trainer</span><span class="p">)</span>
+
+<span class="nd">@trainer</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="n">Events</span><span class="o">.</span><span class="n">EPOCH_COMPLETED</span><span class="p">(</span><span class="n">every</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
+<span class="k">def</span> <span class="nf">log_intermediate_results</span><span class="p">():</span>
+    <span class="n">profiler</span><span class="o">.</span><span class="n">print_results</span><span class="p">(</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_results</span><span class="p">())</span>
+
+<span class="n">trainer</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">dataloader</span><span class="p">,</span> <span class="n">max_epochs</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Typical output:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>-----------------------------------------  -----------------------  -------------- ...
+Handler                                    Event Name                     Total(s)
+-----------------------------------------  -----------------------  --------------
+run.&lt;locals&gt;.log_training_results          EPOCH_COMPLETED                19.43245
+run.&lt;locals&gt;.log_validation_results        EPOCH_COMPLETED                 2.55271
+run.&lt;locals&gt;.log_time                      EPOCH_COMPLETED                 0.00049
+run.&lt;locals&gt;.log_intermediate_results      EPOCH_COMPLETED                 0.00106
+run.&lt;locals&gt;.log_training_loss             ITERATION_COMPLETED               0.059
+run.&lt;locals&gt;.log_time                      COMPLETED                 not triggered
+-----------------------------------------  -----------------------  --------------
+Total                                                                     22.04571
+-----------------------------------------  -----------------------  --------------
+Processing took total 11.29543s [min/index: 0.00393s/1875, max/index: 0.00784s/0,
+ mean: 0.00602s, std: 0.00034s]
+Dataflow took total 16.24365s [min/index: 0.00533s/1874, max/index: 0.01129s/937,
+ mean: 0.00866s, std: 0.00113s]
+</pre></div>
+</div>
+<p>For details, see <a class="reference internal" href="contrib/handlers.html#ignite.contrib.handlers.time_profilers.HandlersTimeProfiler" title="ignite.contrib.handlers.time_profilers.HandlersTimeProfiler"><code class="xref py py-class docutils literal notranslate"><span class="pre">HandlersTimeProfiler</span></code></a>.</p>
+</div>
 <div class="section" id="custom-time-measures">
 <h3>Custom time measures<a class="headerlink" href="#custom-time-measures" title="Permalink to this headline">¶</a></h3>
 <p>Custom time measures can be performed using <a class="reference internal" href="handlers.html#ignite.handlers.Timer" title="ignite.handlers.Timer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Timer</span></code></a>. See its docstring for details.</p>
@@ -662,8 +712,9 @@ not yet triggered
 </div>
 <div class="section" id="other-questions">
 <h2>Other questions<a class="headerlink" href="#other-questions" title="Permalink to this headline">¶</a></h2>
-<p>Other answers can be found on the github among the issues labeled by
-<a class="reference external" href="https://github.com/pytorch/ignite/issues?utf8=%E2%9C%93&amp;q=is%3Aissue+label%3Aquestion+">question</a>.</p>
+<p>Other questions and answers can be also found on the github among the issues labeled by
+<a class="reference external" href="https://github.com/pytorch/ignite/issues?utf8=%E2%9C%93&amp;q=is%3Aissue+label%3Aquestion+">question</a> and on the forum
+<a class="reference external" href="https://discuss.pytorch.org/c/ignite">Discuss.PyTorch</a>, category “Ignite”.</p>
 </div>
 </div>
 
@@ -723,7 +774,8 @@ not yet triggered
 <li><a class="reference internal" href="#switching-data-provider-during-the-training">Switching data provider during the training</a></li>
 <li><a class="reference internal" href="#time-profiling-during-training">Time profiling during training</a><ul>
 <li><a class="reference internal" href="#single-epoch-and-total-time">Single epoch and total time</a></li>
-<li><a class="reference internal" href="#detailed-profiling">Detailed profiling</a></li>
+<li><a class="reference internal" href="#basic-time-profiling">Basic time profiling</a></li>
+<li><a class="reference internal" href="#event-handlers-time-profiling">Event handlers time profiling</a></li>
 <li><a class="reference internal" href="#custom-time-measures">Custom time measures</a></li>
 </ul>
 </li>
@@ -742,11 +794,11 @@ not yet triggered
 
      
        <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-         <script type="text/javascript" src="_static/jquery.js"></script>
-         <script type="text/javascript" src="_static/underscore.js"></script>
-         <script type="text/javascript" src="_static/doctools.js"></script>
-         <script type="text/javascript" src="_static/language_data.js"></script>
-         <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+         <script src="_static/jquery.js"></script>
+         <script src="_static/underscore.js"></script>
+         <script src="_static/doctools.js"></script>
+         <script src="_static/language_data.js"></script>
+         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
      
 
   

@@ -14,6 +14,8 @@
 
   
   
+    <link rel="shortcut icon" href="../../../../_static/ignite_logomark.svg"/>
+  
   
   
     <link rel="canonical" href="https://pytorch.org/ignite/index.html_modules/ignite/contrib/handlers/trains_logger.html"/>
@@ -60,17 +62,19 @@
 
 <div class="container-fluid header-holder tutorials-header" id="header-holder">
   <div class="container">
+
+    <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
+
     <div class="header-container">
-      <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
 
       <div class="main-menu">
         <ul>
           <li>
-            <a href="../../../../concepts.html">Concepts</a>
+            <a href="../../../../quickstart.html">Quickstart</a>
           </li>
 
           <li>
-            <a href="../../../../quickstart.html">Quickstart</a>
+            <a href="../../../../concepts.html">Concepts</a>
           </li>
 
           <li>
@@ -120,7 +124,7 @@
               
               
                 <div class="version">
-                  master (0.4.0)
+                  master (0.5.0)
                 </div>
               
             
@@ -150,8 +154,8 @@
             
               <p class="caption"><span class="caption-text">Notes</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../concepts.html">Concepts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../faq.html">FAQ</a></li>
 </ul>
@@ -269,13 +273,18 @@
              <article itemprop="articleBody" id="pytorch-article" class="pytorch-article">
               
   <h1>Source code for ignite.contrib.handlers.trains_logger</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">os</span>
+<span></span><span class="kn">import</span> <span class="nn">numbers</span>
+<span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">tempfile</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span> <span class="nn">enum</span> <span class="kn">import</span> <span class="n">Enum</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Type</span>
 
 <span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Module</span>
+<span class="kn">from</span> <span class="nn">torch.optim</span> <span class="kn">import</span> <span class="n">Optimizer</span>
 
 <span class="kn">import</span> <span class="nn">ignite.distributed</span> <span class="k">as</span> <span class="nn">idist</span>
 <span class="kn">from</span> <span class="nn">ignite.contrib.handlers.base_logger</span> <span class="kn">import</span> <span class="p">(</span>
@@ -285,6 +294,7 @@
     <span class="n">BaseWeightsHistHandler</span><span class="p">,</span>
     <span class="n">BaseWeightsScalarHandler</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span> <span class="nn">ignite.engine</span> <span class="kn">import</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">EventEnum</span>
 <span class="kn">from</span> <span class="nn">ignite.handlers</span> <span class="kn">import</span> <span class="n">global_step_from_engine</span>
 <span class="kn">from</span> <span class="nn">ignite.handlers.checkpoint</span> <span class="kn">import</span> <span class="n">DiskSaver</span>
 
@@ -299,6 +309,163 @@
     <span class="s2">&quot;GradsHistHandler&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_step_from_engine&quot;</span><span class="p">,</span>
 <span class="p">]</span>
+
+
+<div class="viewcode-block" id="TrainsLogger"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger">[docs]</a><span class="k">class</span> <span class="nc">TrainsLogger</span><span class="p">(</span><span class="n">BaseLogger</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    `Trains &lt;https://github.com/allegroai/trains&gt;`_ handler to log metrics, text, model/optimizer parameters,</span>
+<span class="sd">    plots during training and validation.</span>
+<span class="sd">    Also supports model checkpoints logging and upload to the storage solution of your choice (i.e. Trains File server,</span>
+<span class="sd">    S3 bucket etc.)</span>
+
+<span class="sd">    .. code-block:: bash</span>
+
+<span class="sd">        pip install trains</span>
+<span class="sd">        trains-init</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        project_name (str): The name of the project in which the experiment will be created. If the project</span>
+<span class="sd">            does not exist, it is created. If ``project_name`` is ``None``, the repository name is used. (Optional)</span>
+<span class="sd">        task_name (str): The name of Task (experiment). If ``task_name`` is ``None``, the Python experiment</span>
+<span class="sd">            script&#39;s file name is used. (Optional)</span>
+<span class="sd">        task_type (str): Optional. The task type. Valid values are:</span>
+<span class="sd">            - ``TaskTypes.training`` (Default)</span>
+<span class="sd">            - ``TaskTypes.train``</span>
+<span class="sd">            - ``TaskTypes.testing``</span>
+<span class="sd">            - ``TaskTypes.inference``</span>
+
+<span class="sd">    Examples:</span>
+
+<span class="sd">        .. code-block:: python</span>
+
+<span class="sd">            from ignite.contrib.handlers.trains_logger import *</span>
+
+<span class="sd">            # Create a logger</span>
+
+<span class="sd">            trains_logger = TrainsLogger(</span>
+<span class="sd">                project_name=&quot;pytorch-ignite-integration&quot;,</span>
+<span class="sd">                task_name=&quot;cnn-mnist&quot;</span>
+<span class="sd">            )</span>
+
+<span class="sd">            # Attach the logger to the trainer to log training loss at each iteration</span>
+<span class="sd">            trains_logger.attach_output_handler(</span>
+<span class="sd">                trainer,</span>
+<span class="sd">                event_name=Events.ITERATION_COMPLETED,</span>
+<span class="sd">                tag=&quot;training&quot;,</span>
+<span class="sd">                output_transform=lambda loss: {&quot;loss&quot;: loss}</span>
+<span class="sd">            )</span>
+
+<span class="sd">            # Attach the logger to the evaluator on the training dataset and log NLL, Accuracy metrics after each epoch</span>
+<span class="sd">            # We setup `global_step_transform=global_step_from_engine(trainer)` to take the epoch</span>
+<span class="sd">            # of the `trainer` instead of `train_evaluator`.</span>
+<span class="sd">            trains_logger.attach_output_handler(</span>
+<span class="sd">                train_evaluator,</span>
+<span class="sd">                event_name=Events.EPOCH_COMPLETED,</span>
+<span class="sd">                tag=&quot;training&quot;,</span>
+<span class="sd">                metric_names=[&quot;nll&quot;, &quot;accuracy&quot;],</span>
+<span class="sd">                global_step_transform=global_step_from_engine(trainer),</span>
+<span class="sd">            )</span>
+
+<span class="sd">            # Attach the logger to the evaluator on the validation dataset and log NLL, Accuracy metrics after</span>
+<span class="sd">            # each epoch. We setup `global_step_transform=global_step_from_engine(trainer)` to take the epoch of the</span>
+<span class="sd">            # `trainer` instead of `evaluator`.</span>
+<span class="sd">            trains_logger.attach_output_handler(</span>
+<span class="sd">                evaluator,</span>
+<span class="sd">                event_name=Events.EPOCH_COMPLETED,</span>
+<span class="sd">                tag=&quot;validation&quot;,</span>
+<span class="sd">                metric_names=[&quot;nll&quot;, &quot;accuracy&quot;],</span>
+<span class="sd">                global_step_transform=global_step_from_engine(trainer)),</span>
+<span class="sd">            )</span>
+
+<span class="sd">            # Attach the logger to the trainer to log optimizer&#39;s parameters, e.g. learning rate at each iteration</span>
+<span class="sd">            trains_logger.attach_opt_params_handler(</span>
+<span class="sd">                trainer,</span>
+<span class="sd">                event_name=Events.ITERATION_STARTED,</span>
+<span class="sd">                optimizer=optimizer,</span>
+<span class="sd">                param_name=&#39;lr&#39;  # optional</span>
+<span class="sd">            )</span>
+
+<span class="sd">            # Attach the logger to the trainer to log model&#39;s weights norm after each iteration</span>
+<span class="sd">            trains_logger.attach(</span>
+<span class="sd">                trainer,</span>
+<span class="sd">                event_name=Events.ITERATION_COMPLETED,</span>
+<span class="sd">                log_handler=WeightsScalarHandler(model)</span>
+<span class="sd">            )</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">trains</span> <span class="kn">import</span> <span class="n">Task</span>
+            <span class="kn">from</span> <span class="nn">trains.binding.frameworks.tensorflow_bind</span> <span class="kn">import</span> <span class="n">WeightsGradientHistHelper</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;This contrib module requires trains to be installed. &quot;</span>
+                <span class="s2">&quot;You may install trains using: </span><span class="se">\n</span><span class="s2"> pip install trains </span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">experiment_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;project_name&quot;</span><span class="p">,</span> <span class="s2">&quot;task_name&quot;</span><span class="p">,</span> <span class="s2">&quot;task_type&quot;</span><span class="p">)}</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bypass_mode</span><span class="p">():</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;TrainsSaver: running in bypass mode&quot;</span><span class="p">)</span>
+
+            <span class="k">class</span> <span class="nc">_Stub</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+                <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="o">**</span><span class="n">__</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="bp">self</span>
+
+                <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+                    <span class="k">return</span> <span class="bp">self</span>
+
+                <span class="k">def</span> <span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+                    <span class="k">pass</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_task</span> <span class="o">=</span> <span class="n">_Stub</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_task</span> <span class="o">=</span> <span class="n">Task</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+                <span class="n">project_name</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project_name&quot;</span><span class="p">),</span>
+                <span class="n">task_name</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;task_name&quot;</span><span class="p">),</span>
+                <span class="n">task_type</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;task_type&quot;</span><span class="p">,</span> <span class="n">Task</span><span class="o">.</span><span class="n">TaskTypes</span><span class="o">.</span><span class="n">training</span><span class="p">),</span>
+                <span class="o">**</span><span class="n">experiment_kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">get_logger</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">grad_helper</span> <span class="o">=</span> <span class="n">WeightsGradientHistHelper</span><span class="p">(</span><span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TrainsLogger.set_bypass_mode"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger.set_bypass_mode">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">set_bypass_mode</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">bypass</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Will bypass all outside communication, and will drop all logs.</span>
+<span class="sd">        Should only be used in &quot;standalone mode&quot;, when there is no access to the *trains-server*.</span>
+<span class="sd">        Args:</span>
+<span class="sd">            bypass: If ``True``, all outside communication is skipped.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_bypass&quot;</span><span class="p">,</span> <span class="n">bypass</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TrainsLogger.bypass_mode"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger.bypass_mode">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">bypass_mode</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the bypass mode state.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            `GITHUB_ACTIONS` env will automatically set bypass_mode to ``True``</span>
+<span class="sd">            unless overridden specifically with ``TrainsLogger.set_bypass_mode(False)``.</span>
+
+<span class="sd">        Return:</span>
+<span class="sd">            If True, all outside communication is skipped.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_bypass&quot;</span><span class="p">,</span> <span class="nb">bool</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;CI&quot;</span><span class="p">)))</span></div>
+
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_create_output_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">OutputHandler</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_create_opt_params_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">OptimizerParamsHandler</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="OutputHandler"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.OutputHandler">[docs]</a><span class="k">class</span> <span class="nc">OutputHandler</span><span class="p">(</span><span class="n">BaseOutputHandler</span><span class="p">):</span>
@@ -386,7 +553,6 @@
 <span class="sd">            :meth:`~ignite.contrib.handlers.trains_logger.global_step_from_engine`.</span>
 
 <span class="sd">    Note:</span>
-
 <span class="sd">        Example of `global_step_transform`:</span>
 
 <span class="sd">        .. code-block:: python</span>
@@ -396,10 +562,16 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag</span><span class="p">,</span> <span class="n">metric_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_transform</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">global_step_transform</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">tag</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">metric_names</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">output_transform</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">global_step_transform</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">OutputHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="n">metric_names</span><span class="p">,</span> <span class="n">output_transform</span><span class="p">,</span> <span class="n">global_step_transform</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler OutputHandler works only with TrainsLogger&quot;</span><span class="p">)</span>
@@ -415,10 +587,15 @@
             <span class="p">)</span>
 
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">metrics</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">ndimension</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">trains_logger</span><span class="o">.</span><span class="n">report_scalar</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tag</span><span class="p">,</span> <span class="n">series</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">iteration</span><span class="o">=</span><span class="n">global_step</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">ndimension</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">trains_logger</span><span class="o">.</span><span class="n">report_scalar</span><span class="p">(</span>
+                        <span class="n">title</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag</span><span class="p">,</span> <span class="n">key</span><span class="p">),</span> <span class="n">series</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">iteration</span><span class="o">=</span><span class="n">global_step</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">v</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;TrainsLogger output_handler can not log &quot;</span> <span class="s2">&quot;metrics value type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)))</span></div>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;TrainsLogger output_handler can not log metrics value type </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)))</span></div>
 
 
 <div class="viewcode-block" id="OptimizerParamsHandler"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.OptimizerParamsHandler">[docs]</a><span class="k">class</span> <span class="nc">OptimizerParamsHandler</span><span class="p">(</span><span class="n">BaseOptimizerParamsHandler</span><span class="p">):</span>
@@ -451,15 +628,16 @@
 <span class="sd">            )</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        optimizer (torch.optim.Optimizer): torch optimizer which parameters to log</span>
+<span class="sd">        optimizer (torch.optim.Optimizer or object): torch optimizer or any object with attribute ``param_groups``</span>
+<span class="sd">            as a sequence.</span>
 <span class="sd">        param_name (str): parameter name</span>
 <span class="sd">        tag (str, optional): common title for all produced plots. For example, &quot;generator&quot;</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">param_name</span><span class="o">=</span><span class="s2">&quot;lr&quot;</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">:</span> <span class="n">Optimizer</span><span class="p">,</span> <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;lr&quot;</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">OptimizerParamsHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">tag</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler OptimizerParamsHandler works only with TrainsLogger&quot;</span><span class="p">)</span>
 
@@ -507,10 +685,10 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">reduction</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">reduction</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">WeightsScalarHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">reduction</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="n">tag</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler WeightsScalarHandler works only with TrainsLogger&quot;</span><span class="p">)</span>
@@ -559,10 +737,10 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">WeightsHistHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="n">tag</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler &#39;WeightsHistHandler&#39; works only with TrainsLogger&quot;</span><span class="p">)</span>
 
@@ -614,10 +792,10 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">reduction</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">reduction</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">GradsScalarHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">reduction</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="n">tag</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler GradsScalarHandler works only with TrainsLogger&quot;</span><span class="p">)</span>
 
@@ -665,10 +843,10 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">GradsHistHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="n">tag</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">event_name</span><span class="p">:</span> <span class="n">EventEnum</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">TrainsLogger</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Handler &#39;GradsHistHandler&#39; works only with TrainsLogger&quot;</span><span class="p">)</span>
 
@@ -686,162 +864,6 @@
                 <span class="n">step</span><span class="o">=</span><span class="n">global_step</span><span class="p">,</span>
                 <span class="n">hist_data</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span>
             <span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="TrainsLogger"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger">[docs]</a><span class="k">class</span> <span class="nc">TrainsLogger</span><span class="p">(</span><span class="n">BaseLogger</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    `Trains &lt;https://github.com/allegroai/trains&gt;`_ handler to log metrics, text, model/optimizer parameters,</span>
-<span class="sd">    plots during training and validation.</span>
-<span class="sd">    Also supports model checkpoints logging and upload to the storage solution of your choice (i.e. Trains File server,</span>
-<span class="sd">    S3 bucket etc.)</span>
-
-<span class="sd">    .. code-block:: bash</span>
-
-<span class="sd">        pip install trains</span>
-<span class="sd">        trains-init</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        project_name (str): The name of the project in which the experiment will be created. If the project</span>
-<span class="sd">            does not exist, it is created. If ``project_name`` is ``None``, the repository name is used. (Optional)</span>
-<span class="sd">        task_name (str): The name of Task (experiment). If ``task_name`` is ``None``, the Python experiment</span>
-<span class="sd">            script&#39;s file name is used. (Optional)</span>
-<span class="sd">        task_type (str): Optional. The task type. Valid values are:</span>
-<span class="sd">            - ``TaskTypes.training`` (Default)</span>
-<span class="sd">            - ``TaskTypes.train``</span>
-<span class="sd">            - ``TaskTypes.testing``</span>
-<span class="sd">            - ``TaskTypes.inference``</span>
-
-<span class="sd">    Examples:</span>
-
-<span class="sd">        .. code-block:: python</span>
-
-<span class="sd">            from ignite.contrib.handlers.trains_logger import *</span>
-
-<span class="sd">            # Create a logger</span>
-
-<span class="sd">            trains_logger = TrainsLogger(</span>
-<span class="sd">                project_name=&quot;pytorch-ignite-integration&quot;,</span>
-<span class="sd">                task_name=&quot;cnn-mnist&quot;</span>
-<span class="sd">            )</span>
-
-<span class="sd">            # Attach the logger to the trainer to log training loss at each iteration</span>
-<span class="sd">            trains_logger.attach_output_handler(</span>
-<span class="sd">                trainer,</span>
-<span class="sd">                event_name=Events.ITERATION_COMPLETED,</span>
-<span class="sd">                tag=&quot;training&quot;,</span>
-<span class="sd">                output_transform=lambda loss: {&quot;loss&quot;: loss}</span>
-<span class="sd">            )</span>
-
-<span class="sd">            # Attach the logger to the evaluator on the training dataset and log NLL, Accuracy metrics after each epoch</span>
-<span class="sd">            # We setup `global_step_transform=global_step_from_engine(trainer)` to take the epoch</span>
-<span class="sd">            # of the `trainer` instead of `train_evaluator`.</span>
-<span class="sd">            trains_logger.attach_output_handler(</span>
-<span class="sd">                train_evaluator,</span>
-<span class="sd">                event_name=Events.EPOCH_COMPLETED,</span>
-<span class="sd">                tag=&quot;training&quot;,</span>
-<span class="sd">                metric_names=[&quot;nll&quot;, &quot;accuracy&quot;],</span>
-<span class="sd">                global_step_transform=global_step_from_engine(trainer),</span>
-<span class="sd">            )</span>
-
-<span class="sd">            # Attach the logger to the evaluator on the validation dataset and log NLL, Accuracy metrics after</span>
-<span class="sd">            # each epoch. We setup `global_step_transform=global_step_from_engine(trainer)` to take the epoch of the</span>
-<span class="sd">            # `trainer` instead of `evaluator`.</span>
-<span class="sd">            trains_logger.attach_output_handler(</span>
-<span class="sd">                evaluator,</span>
-<span class="sd">                event_name=Events.EPOCH_COMPLETED,</span>
-<span class="sd">                tag=&quot;validation&quot;,</span>
-<span class="sd">                metric_names=[&quot;nll&quot;, &quot;accuracy&quot;],</span>
-<span class="sd">                global_step_transform=global_step_from_engine(trainer)),</span>
-<span class="sd">            )</span>
-
-<span class="sd">            # Attach the logger to the trainer to log optimizer&#39;s parameters, e.g. learning rate at each iteration</span>
-<span class="sd">            trains_logger.attach_opt_params_handler(</span>
-<span class="sd">                trainer,</span>
-<span class="sd">                event_name=Events.ITERATION_STARTED,</span>
-<span class="sd">                optimizer=optimizer,</span>
-<span class="sd">                param_name=&#39;lr&#39;  # optional</span>
-<span class="sd">            )</span>
-
-<span class="sd">            # Attach the logger to the trainer to log model&#39;s weights norm after each iteration</span>
-<span class="sd">            trains_logger.attach(</span>
-<span class="sd">                trainer,</span>
-<span class="sd">                event_name=Events.ITERATION_COMPLETED,</span>
-<span class="sd">                log_handler=WeightsScalarHandler(model)</span>
-<span class="sd">            )</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="kn">import</span> <span class="nn">trains</span>
-        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;This contrib module requires trains to be installed. &quot;</span>
-                <span class="s2">&quot;You may install trains using: </span><span class="se">\n</span><span class="s2"> pip install trains </span><span class="se">\n</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-
-        <span class="n">experiment_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;project_name&quot;</span><span class="p">,</span> <span class="s2">&quot;task_name&quot;</span><span class="p">,</span> <span class="s2">&quot;task_type&quot;</span><span class="p">,)}</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bypass_mode</span><span class="p">():</span>
-            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;TrainsSaver: running in bypass mode&quot;</span><span class="p">)</span>
-
-            <span class="k">class</span> <span class="nc">_Stub</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-                <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="o">**</span><span class="n">__</span><span class="p">):</span>
-                    <span class="k">return</span> <span class="bp">self</span>
-
-                <span class="k">def</span> <span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
-                    <span class="k">if</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">):</span>
-                        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
-                    <span class="k">return</span> <span class="bp">self</span>
-
-                <span class="k">def</span> <span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-                    <span class="k">pass</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">_task</span> <span class="o">=</span> <span class="n">_Stub</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_task</span> <span class="o">=</span> <span class="n">trains</span><span class="o">.</span><span class="n">Task</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
-                <span class="n">project_name</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project_name&quot;</span><span class="p">),</span>
-                <span class="n">task_name</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;task_name&quot;</span><span class="p">),</span>
-                <span class="n">task_type</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;task_type&quot;</span><span class="p">,</span> <span class="n">trains</span><span class="o">.</span><span class="n">Task</span><span class="o">.</span><span class="n">TaskTypes</span><span class="o">.</span><span class="n">training</span><span class="p">),</span>
-                <span class="o">**</span><span class="n">experiment_kwargs</span><span class="p">,</span>
-            <span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">get_logger</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad_helper</span> <span class="o">=</span> <span class="n">trains</span><span class="o">.</span><span class="n">binding</span><span class="o">.</span><span class="n">frameworks</span><span class="o">.</span><span class="n">tensorflow_bind</span><span class="o">.</span><span class="n">WeightsGradientHistHelper</span><span class="p">(</span>
-            <span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span><span class="p">,</span>
-        <span class="p">)</span>
-
-<div class="viewcode-block" id="TrainsLogger.set_bypass_mode"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger.set_bypass_mode">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">set_bypass_mode</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">bypass</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Will bypass all outside communication, and will drop all logs.</span>
-<span class="sd">        Should only be used in &quot;standalone mode&quot;, when there is no access to the *trains-server*.</span>
-<span class="sd">        Args:</span>
-<span class="sd">            bypass: If ``True``, all outside communication is skipped.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_bypass&quot;</span><span class="p">,</span> <span class="n">bypass</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="TrainsLogger.bypass_mode"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsLogger.bypass_mode">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">bypass_mode</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Returns the bypass mode state.</span>
-<span class="sd">        Note:</span>
-<span class="sd">            `GITHUB_ACTIONS` env will automatically set bypass_mode to ``True``</span>
-<span class="sd">            unless overridden specifically with ``TrainsLogger.set_bypass_mode(False)``.</span>
-<span class="sd">        Return:</span>
-<span class="sd">            If True, all outside communication is skipped.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_bypass&quot;</span><span class="p">,</span> <span class="nb">bool</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;CI&quot;</span><span class="p">)))</span></div>
-
-    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">trains_logger</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-
-    <span class="k">def</span> <span class="nf">_create_output_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">OutputHandler</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">_create_opt_params_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">OptimizerParamsHandler</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TrainsSaver"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsSaver">[docs]</a><span class="k">class</span> <span class="nc">TrainsSaver</span><span class="p">(</span><span class="n">DiskSaver</span><span class="p">):</span>
@@ -885,7 +907,9 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_uri</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dirname</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_uri</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dirname</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">):</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_setup_check_trains</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">output_uri</span><span class="p">)</span>
 
@@ -905,10 +929,12 @@
         <span class="k">if</span> <span class="s2">&quot;atomic&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
             <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;atomic&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_slots</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+
         <span class="nb">super</span><span class="p">(</span><span class="n">TrainsSaver</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dirname</span><span class="o">=</span><span class="n">dirname</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="nd">@idist</span><span class="o">.</span><span class="n">one_rank_only</span><span class="p">()</span>
-    <span class="k">def</span> <span class="nf">_setup_check_trains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">output_uri</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_setup_check_trains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">TrainsLogger</span><span class="p">,</span> <span class="n">output_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">from</span> <span class="nn">trains</span> <span class="kn">import</span> <span class="n">Task</span>
         <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
@@ -930,32 +956,91 @@
         <span class="k">if</span> <span class="n">output_uri</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">output_uri</span> <span class="o">=</span> <span class="n">output_uri</span>
 
+    <span class="k">class</span> <span class="nc">_CallbacksContext</span><span class="p">:</span>
+        <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">callback_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">Enum</span><span class="p">],</span>
+            <span class="n">slots</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span>
+            <span class="n">checkpoint_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">basename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Mapping</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_callback_type</span> <span class="o">=</span> <span class="n">callback_type</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span> <span class="o">=</span> <span class="n">slots</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_key</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">checkpoint_key</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span> <span class="o">=</span> <span class="n">filename</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_basename</span> <span class="o">=</span> <span class="n">basename</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metadata</span> <span class="o">=</span> <span class="n">metadata</span>
+
+        <span class="k">def</span> <span class="nf">pre_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_info</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">action</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_callback_type</span><span class="o">.</span><span class="n">save</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">model_info</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">slot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span> <span class="o">=</span> <span class="n">model_info</span><span class="o">.</span><span class="n">upload_filename</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">model_info</span><span class="o">.</span><span class="n">upload_filename</span><span class="p">)</span>
+                <span class="n">slot</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_slots</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+
+            <span class="n">model_info</span><span class="o">.</span><span class="n">upload_filename</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_basename</span><span class="p">,</span> <span class="n">slot</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">model_info</span><span class="o">.</span><span class="n">local_model_id</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_key</span><span class="p">,</span> <span class="n">model_info</span><span class="o">.</span><span class="n">upload_filename</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">model_info</span>
+
+        <span class="k">def</span> <span class="nf">post_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_info</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">action</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_callback_type</span><span class="o">.</span><span class="n">save</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">model_info</span>
+
+            <span class="n">model_info</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">model_info</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filename</span><span class="p">)</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="s2">&quot;Checkpoint Metadata: &quot;</span>
+            <span class="n">metadata</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_metadata</span><span class="o">.</span><span class="n">items</span><span class="p">())</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_metadata</span> <span class="k">else</span> <span class="s2">&quot;none&quot;</span>
+            <span class="p">)</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">metadata</span> <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span> <span class="k">else</span> <span class="n">line</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="p">(</span><span class="n">model_info</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">comment</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">prefix</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">comment</span><span class="p">:</span>
+                <span class="n">comment</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">metadata</span>
+            <span class="n">model_info</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">comment</span> <span class="o">=</span> <span class="n">comment</span>
+
+            <span class="k">return</span> <span class="n">model_info</span>
+
     <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">checkpoint</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Mapping</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">TrainsSaver</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__call__</span><span class="p">(</span><span class="n">checkpoint</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">trains</span> <span class="kn">import</span> <span class="n">Model</span>
+            <span class="kn">from</span> <span class="nn">trains.binding.frameworks</span> <span class="kn">import</span> <span class="n">WeightsFileHandler</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;This contrib module requires trains to be installed. &quot;</span>
+                <span class="s2">&quot;You may install trains using: </span><span class="se">\n</span><span class="s2"> pip install trains </span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">idist</span><span class="o">.</span><span class="n">get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="c1"># Maybe wont work with XLA</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_atomic</span><span class="p">:</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="kn">import</span> <span class="nn">trains</span>
-                <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                        <span class="s2">&quot;This contrib module requires trains to be installed. &quot;</span>
-                        <span class="s2">&quot;You may install trains using: </span><span class="se">\n</span><span class="s2"> pip install trains </span><span class="se">\n</span><span class="s2">&quot;</span>
-                    <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">basename</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;basename&quot;</span><span class="p">]</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">):</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;Checkpoint metadata missing or basename cannot be found&quot;</span><span class="p">)</span>
+            <span class="n">basename</span> <span class="o">=</span> <span class="s2">&quot;checkpoint&quot;</span>
 
-                <span class="c1"># If atomic, DiskSaver&#39;s implementation first stores checkpoint into a temporary file</span>
-                <span class="c1"># and prohibits trains to automatically detect correct artifact path and name</span>
-                <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dirname</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
-                    <span class="n">trains</span><span class="o">.</span><span class="n">binding</span><span class="o">.</span><span class="n">frameworks</span><span class="o">.</span><span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">create_output_model</span><span class="p">(</span>
-                        <span class="n">model</span><span class="o">=</span><span class="n">checkpoint</span><span class="p">,</span>
-                        <span class="n">saved_path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
-                        <span class="n">framework</span><span class="o">=</span><span class="n">trains</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">Framework</span><span class="o">.</span><span class="n">pytorch</span><span class="p">,</span>
-                        <span class="n">task</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="p">,</span>
-                        <span class="n">singlefile</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                        <span class="n">model_name</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">),</span>
-                    <span class="p">)</span>
+        <span class="n">checkpoint_key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dirname</span><span class="p">,</span> <span class="n">basename</span><span class="p">)</span>
+
+        <span class="n">cb_context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_CallbacksContext</span><span class="p">(</span>
+            <span class="n">callback_type</span><span class="o">=</span><span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">CallbackType</span><span class="p">,</span>
+            <span class="n">slots</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_slots</span><span class="p">[</span><span class="n">checkpoint_key</span><span class="p">],</span>
+            <span class="n">checkpoint_key</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">checkpoint_key</span><span class="p">),</span>
+            <span class="n">filename</span><span class="o">=</span><span class="n">filename</span><span class="p">,</span>
+            <span class="n">basename</span><span class="o">=</span><span class="n">basename</span><span class="p">,</span>
+            <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">pre_cb_id</span> <span class="o">=</span> <span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">add_pre_callback</span><span class="p">(</span><span class="n">cb_context</span><span class="o">.</span><span class="n">pre_callback</span><span class="p">)</span>
+        <span class="n">post_cb_id</span> <span class="o">=</span> <span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">add_post_callback</span><span class="p">(</span><span class="n">cb_context</span><span class="o">.</span><span class="n">post_callback</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">TrainsSaver</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__call__</span><span class="p">(</span><span class="n">checkpoint</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">remove_pre_callback</span><span class="p">(</span><span class="n">pre_cb_id</span><span class="p">)</span>
+            <span class="n">WeightsFileHandler</span><span class="o">.</span><span class="n">remove_post_callback</span><span class="p">(</span><span class="n">post_cb_id</span><span class="p">)</span>
 
 <div class="viewcode-block" id="TrainsSaver.get_local_copy"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsSaver.get_local_copy">[docs]</a>    <span class="nd">@idist</span><span class="o">.</span><span class="n">one_rank_only</span><span class="p">()</span>
     <span class="k">def</span> <span class="nf">get_local_copy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
@@ -974,7 +1059,18 @@
         <span class="n">artifact</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">artifacts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">artifact</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">artifact</span><span class="o">.</span><span class="n">get_local_copy</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">get_logger</span><span class="p">()</span><span class="o">.</span><span class="n">report_text</span><span class="p">(</span><span class="s2">&quot;Can not find artifact </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span></div></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_task</span><span class="o">.</span><span class="n">get_logger</span><span class="p">()</span><span class="o">.</span><span class="n">report_text</span><span class="p">(</span><span class="s2">&quot;Can not find artifact </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="TrainsSaver.remove"><a class="viewcode-back" href="../../../../contrib/handlers.html#ignite.contrib.handlers.trains_logger.TrainsSaver.remove">[docs]</a>    <span class="nd">@idist</span><span class="o">.</span><span class="n">one_rank_only</span><span class="p">()</span>
+    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TrainsSaver</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">slots</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_slots</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">slots</span><span class="p">[</span><span class="n">slots</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">filename</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">break</span></div></div>
 </pre></div>
 
              </article>
@@ -1020,11 +1116,11 @@
 
      
        <script type="text/javascript" id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
-         <script type="text/javascript" src="../../../../_static/jquery.js"></script>
-         <script type="text/javascript" src="../../../../_static/underscore.js"></script>
-         <script type="text/javascript" src="../../../../_static/doctools.js"></script>
-         <script type="text/javascript" src="../../../../_static/language_data.js"></script>
-         <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+         <script src="../../../../_static/jquery.js"></script>
+         <script src="../../../../_static/underscore.js"></script>
+         <script src="../../../../_static/doctools.js"></script>
+         <script src="../../../../_static/language_data.js"></script>
+         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
      
 
   

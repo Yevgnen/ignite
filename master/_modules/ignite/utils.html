@@ -14,6 +14,8 @@
 
   
   
+    <link rel="shortcut icon" href="../../_static/ignite_logomark.svg"/>
+  
   
   
     <link rel="canonical" href="https://pytorch.org/ignite/index.html_modules/ignite/utils.html"/>
@@ -60,17 +62,19 @@
 
 <div class="container-fluid header-holder tutorials-header" id="header-holder">
   <div class="container">
+
+    <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
+
     <div class="header-container">
-      <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
 
       <div class="main-menu">
         <ul>
           <li>
-            <a href="../../concepts.html">Concepts</a>
+            <a href="../../quickstart.html">Quickstart</a>
           </li>
 
           <li>
-            <a href="../../quickstart.html">Quickstart</a>
+            <a href="../../concepts.html">Concepts</a>
           </li>
 
           <li>
@@ -120,7 +124,7 @@
               
               
                 <div class="version">
-                  master (0.4.0)
+                  master (0.5.0)
                 </div>
               
             
@@ -150,8 +154,8 @@
             
               <p class="caption"><span class="caption-text">Notes</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../concepts.html">Concepts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../faq.html">FAQ</a></li>
 </ul>
@@ -272,11 +276,11 @@
 <span></span><span class="kn">import</span> <span class="nn">collections.abc</span> <span class="k">as</span> <span class="nn">collections</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">random</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
 
 <span class="kn">import</span> <span class="nn">torch</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;convert_tensor&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_to_tensor&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_to_type&quot;</span><span class="p">,</span> <span class="s2">&quot;to_onehot&quot;</span><span class="p">,</span> <span class="s2">&quot;setup_logger&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;convert_tensor&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_to_tensor&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_to_type&quot;</span><span class="p">,</span> <span class="s2">&quot;to_onehot&quot;</span><span class="p">,</span> <span class="s2">&quot;setup_logger&quot;</span><span class="p">,</span> <span class="s2">&quot;manual_seed&quot;</span><span class="p">]</span>
 
 
 <div class="viewcode-block" id="convert_tensor"><a class="viewcode-back" href="../../utils.html#ignite.utils.convert_tensor">[docs]</a><span class="k">def</span> <span class="nf">convert_tensor</span><span class="p">(</span>
@@ -309,16 +313,17 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">input_type</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)):</span>
         <span class="k">return</span> <span class="n">input_</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">Mapping</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">)({</span><span class="n">k</span><span class="p">:</span> <span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="s2">&quot;_fields&quot;</span><span class="p">):</span>  <span class="c1"># namedtuple</span>
-        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">)(</span><span class="o">*</span><span class="p">(</span><span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="p">))</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">)([</span><span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="p">])</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">((</span><span class="s2">&quot;input must contain </span><span class="si">{}</span><span class="s2">, dicts or lists; found </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">input_type</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">))))</span></div>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">Mapping</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">))(</span>
+            <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="s2">&quot;_fields&quot;</span><span class="p">):</span>  <span class="c1"># namedtuple</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">))(</span><span class="o">*</span><span class="p">(</span><span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="p">))</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">))([</span><span class="n">apply_to_type</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">input_type</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span> <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">input_</span><span class="p">])</span>
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">((</span><span class="s2">&quot;input must contain </span><span class="si">{}</span><span class="s2">, dicts or lists; found </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">input_type</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">input_</span><span class="p">))))</span></div>
 
 
 <div class="viewcode-block" id="to_onehot"><a class="viewcode-back" href="../../utils.html#ignite.utils.to_onehot">[docs]</a><span class="k">def</span> <span class="nf">to_onehot</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
@@ -411,7 +416,7 @@
     <span class="k">return</span> <span class="n">logger</span></div>
 
 
-<span class="k">def</span> <span class="nf">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="manual_seed"><a class="viewcode-back" href="../../utils.html#ignite.utils.manual_seed">[docs]</a><span class="k">def</span> <span class="nf">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Setup random state from a seed for `torch`, `random` and optionally `numpy` (if can be imported).</span>
 
 <span class="sd">    Args:</span>
@@ -420,12 +425,16 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
     <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed_all</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 
         <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-        <span class="k">pass</span>
+        <span class="k">pass</span></div>
 </pre></div>
 
              </article>
@@ -471,11 +480,11 @@
 
      
        <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-         <script type="text/javascript" src="../../_static/jquery.js"></script>
-         <script type="text/javascript" src="../../_static/underscore.js"></script>
-         <script type="text/javascript" src="../../_static/doctools.js"></script>
-         <script type="text/javascript" src="../../_static/language_data.js"></script>
-         <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+         <script src="../../_static/jquery.js"></script>
+         <script src="../../_static/underscore.js"></script>
+         <script src="../../_static/doctools.js"></script>
+         <script src="../../_static/language_data.js"></script>
+         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
      
 
   

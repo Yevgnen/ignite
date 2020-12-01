@@ -14,6 +14,8 @@
 
   
   
+    <link rel="shortcut icon" href="../../../_static/ignite_logomark.svg"/>
+  
   
   
     <link rel="canonical" href="https://pytorch.org/ignite/index.html_modules/ignite/metrics/fbeta.html"/>
@@ -60,17 +62,19 @@
 
 <div class="container-fluid header-holder tutorials-header" id="header-holder">
   <div class="container">
+
+    <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
+
     <div class="header-container">
-      <a class="header-logo" href="https://pytorch.org/ignite" aria-label="PyTorch"></a>
 
       <div class="main-menu">
         <ul>
           <li>
-            <a href="../../../concepts.html">Concepts</a>
+            <a href="../../../quickstart.html">Quickstart</a>
           </li>
 
           <li>
-            <a href="../../../quickstart.html">Quickstart</a>
+            <a href="../../../concepts.html">Concepts</a>
           </li>
 
           <li>
@@ -120,7 +124,7 @@
               
               
                 <div class="version">
-                  master (0.4.0)
+                  master (0.5.0)
                 </div>
               
             
@@ -150,8 +154,8 @@
             
               <p class="caption"><span class="caption-text">Notes</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../concepts.html">Concepts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../faq.html">FAQ</a></li>
 </ul>
@@ -286,7 +290,7 @@
     <span class="n">precision</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Precision</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">recall</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Recall</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">output_transform</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">device</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MetricsLambda</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Calculates F-beta score</span>
 
@@ -297,9 +301,11 @@
 <span class="sd">        precision (Precision, optional): precision object metric with `average=False` to compute F-beta score</span>
 <span class="sd">        recall (Precision, optional): recall object metric with `average=False` to compute F-beta score</span>
 <span class="sd">        output_transform (callable, optional): a callable that is used to transform the</span>
-<span class="sd">            :class:`~ignite.engine.Engine`&#39;s `process_function`&#39;s output into the</span>
+<span class="sd">            :class:`~ignite.engine.engine.Engine`&#39;s ``process_function``&#39;s output into the</span>
 <span class="sd">            form expected by the metric. It is used only if precision or recall are not provided.</span>
-<span class="sd">        device (str of torch.device, optional): optional device specification for internal storage.</span>
+<span class="sd">        device (str or torch.device): specifies which device updates are accumulated on. Setting the metric&#39;s</span>
+<span class="sd">            device to be the same as your ``update`` arguments ensures the ``update`` method is non-blocking. By</span>
+<span class="sd">            default, CPU.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        MetricsLambda, F-beta metric</span>
@@ -315,7 +321,7 @@
 
     <span class="k">if</span> <span class="n">precision</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">precision</span> <span class="o">=</span> <span class="n">Precision</span><span class="p">(</span>
-            <span class="n">output_transform</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">output_transform</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">output_transform</span><span class="p">,</span>
+            <span class="n">output_transform</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">output_transform</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">output_transform</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
             <span class="n">average</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
         <span class="p">)</span>
@@ -324,7 +330,7 @@
 
     <span class="k">if</span> <span class="n">recall</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">recall</span> <span class="o">=</span> <span class="n">Recall</span><span class="p">(</span>
-            <span class="n">output_transform</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">output_transform</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">output_transform</span><span class="p">,</span>
+            <span class="n">output_transform</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">output_transform</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">output_transform</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
             <span class="n">average</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
         <span class="p">)</span>
@@ -382,11 +388,11 @@
 
      
        <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
-         <script type="text/javascript" src="../../../_static/jquery.js"></script>
-         <script type="text/javascript" src="../../../_static/underscore.js"></script>
-         <script type="text/javascript" src="../../../_static/doctools.js"></script>
-         <script type="text/javascript" src="../../../_static/language_data.js"></script>
-         <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+         <script src="../../../_static/jquery.js"></script>
+         <script src="../../../_static/underscore.js"></script>
+         <script src="../../../_static/doctools.js"></script>
+         <script src="../../../_static/language_data.js"></script>
+         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
      
 
   
